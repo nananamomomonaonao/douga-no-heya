@@ -59,6 +59,11 @@
   .card:hover .thumb { border-radius:0; }
   .meta { display:flex; gap:12px; margin-top:12px; }
   .ava { width:36px; height:36px; border-radius:50%; object-fit:cover; flex:none; background:var(--bg2); }
+  .ava.ph { display:grid; place-items:center; font-weight:700; color:var(--sub); }
+  .tchips { display:flex; gap:8px; flex-wrap:wrap; margin:0 0 16px; }
+  .tchips a { height:32px; padding:0 12px; border-radius:16px; background:var(--chip); display:inline-flex; align-items:center; font-weight:500; white-space:nowrap; }
+  .tchips a:hover { background:var(--hover); }
+  .about { color:var(--sub); margin:-8px 0 16px; max-width:900px; line-height:22px; }
   .t { font-size:16px; font-weight:500; line-height:22px; color:var(--ink); display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:2; overflow:hidden; overflow-wrap:anywhere; }
   .s { color:var(--sub); margin-top:4px; line-height:20px; font-size:14px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .s a:hover { color:var(--ink); }
@@ -147,6 +152,26 @@ function prepare() {
     const v = { id: a[0], title: a[1], ch, at: a[3], short: !!a[4], views: a[5] };
     V.push(v); vById[v.id] = v; (byCh[ch.id] = byCh[ch.id] || []).push(v);
   });
+  // はやり（trends.js）：流行ごとに、個別に選んだ動画（許可チャンネル以外のものも含む）と、タイトルから拾う言葉を持つ
+  const byName = {}; CH.forEach(c => byName[c.name] = c);
+  TR = (window.TRENDS || []).map(t => {
+    let re = null; try { re = t.kw ? new RegExp(t.kw, "i") : null; } catch (e) {}
+    const picked = (t.videos || []).map(x => {
+      if (vById[x.id]) { vById[x.id].trend = t.name; return vById[x.id]; }
+      // 投稿者が許可チャンネルなら、そのチャンネルの動画として扱う（古くて一覧に無かっただけ）
+      const known = byName[x.by];
+      const v = { id: x.id, title: x.title, ch: known || { id: "", name: x.by || "", genre: "はやり", avatar: "", ext: true }, at: 0, short: !!x.short, views: 0, trend: t.name };
+      vById[v.id] = v; EXTV.push(v); return v;
+    });
+    return { name: t.name, kind: t.kind || "", about: t.about || "", re, picked };
+  });
+}
+let TR = [], EXTV = [];
+// その流行の動画：個別に選んだもの＋許可チャンネルの動画でタイトルが当たるもの（再生数の多い順）
+function trendVideos(t) {
+  const have = new Set(t.picked.map(v => v.id));
+  const more = t.re ? V.filter(v => !have.has(v.id) && t.re.test(v.title)).sort((a, b) => b.views - a.views).slice(0, 60) : [];
+  return t.picked.concat(more);
 }
 // 表示用
 function ago(ts) {
@@ -163,7 +188,7 @@ function views(n) {
   if (n >= 1e4) return (n >= 1e5 ? Math.round(n / 1e4) : (n / 1e4).toFixed(1).replace(/\.0$/, "")) + "万 回視聴";
   return n.toLocaleString() + " 回視聴";
 }
-const sub = v => [views(v.views), ago(v.at)].filter(Boolean).join("・");
+const sub = v => [views(v.views), v.at ? ago(v.at) : ""].filter(Boolean).join("・");
 function img(src, cls) { const i = el("img", cls); i.src = src; i.alt = ""; i.loading = "lazy"; i.referrerPolicy = "no-referrer"; return i; }
 const thumbUrl = v => "https://i.ytimg.com/vi/" + v.id + "/" + (v.short ? "hq720" : "mqdefault") + ".jpg";
 function thumb(v) {
@@ -171,21 +196,29 @@ function thumb(v) {
   i.onerror = () => { i.onerror = null; i.src = "https://i.ytimg.com/vi/" + v.id + "/hqdefault.jpg"; };
   t.append(i); return t;
 }
+function chLink(v) {
+  if (v.ch.ext) return el("span", "", v.ch.name);
+  const a = el("a", "", v.ch.name); a.href = "#/ch/" + v.ch.id; a.onclick = e => e.stopPropagation(); return a;
+}
+function avatar(ch) {
+  if (ch.ext || !ch.avatar) { const d = el("div", "ava ph", (ch.name || "?").slice(0, 1)); return d; }
+  const a = el("a"); a.href = "#/ch/" + ch.id; a.onclick = e => e.stopPropagation(); a.append(img(ch.avatar, "ava")); return a;
+}
 function card(v, opt = {}) {
   const c = el("div", "card"); c.onclick = () => location.hash = "#/watch/" + v.id;
   const m = el("div", "meta"), b = el("div"); b.style.minWidth = 0;
   b.append(el("div", "t", v.title));
   if (!opt.short) {
     if (opt.side) {
-      const s1 = el("div", "s"), a = el("a", "", v.ch.name); a.href = "#/ch/" + v.ch.id; a.onclick = e => e.stopPropagation(); s1.append(a); b.append(s1, el("div", "s", sub(v)));
+      const s1 = el("div", "s"); s1.append(chLink(v)); b.append(s1, el("div", "s", sub(v)));
     } else {
       const s1 = el("div", "s");
-      if (!opt.noCh) { const a = el("a", "", v.ch.name); a.href = "#/ch/" + v.ch.id; a.onclick = e => e.stopPropagation(); s1.append(a); }
+      if (!opt.noCh) s1.append(chLink(v));
       if (views(v.views)) { const x = el("span", opt.noCh ? "" : "gap", "▷ " + views(v.views).replace(" 回視聴", "")); s1.append(x); }
-      s1.append(el("span", "gap", ago(v.at))); b.append(s1);
+      if (v.at) s1.append(el("span", "gap", ago(v.at))); b.append(s1);
     }
-    if (!opt.side && !opt.noCh) { const a = el("a"); a.href = "#/ch/" + v.ch.id; a.onclick = e => e.stopPropagation(); a.append(img(v.ch.avatar, "ava")); m.append(a); }
-  } else b.append(el("div", "s", views(v.views) || ago(v.at)));
+    if (!opt.side && !opt.noCh) m.append(avatar(v.ch));
+  } else b.append(el("div", "s", views(v.views) || (v.at ? ago(v.at) : "")));
   m.append(b); c.append(thumb(v), m); c.title = v.title; return c;
 }
 // ---- おすすめの重みづけ ----
@@ -265,6 +298,16 @@ function home(genre) {
     row.append(...shorts.slice(0, 12).map(v => card(v, { short: true }))); m.append(h, row);
     const sp = el("div"); sp.style.height = "32px"; m.append(sp);
   }
+  if (!genre && TR.length) {
+    // いま はやっているもの：流行ごとに1〜2本ずつ、引き直すたびに入れ替える
+    const pool = []; TR.forEach((t, i) => mix(trendVideos(t).filter(v => !v.short).map(v => ({ id: v.id, at: 0, v })), i + 11).slice(0, 2).forEach(x => pool.push(x.v)));
+    const pickT = mix(pool.map(v => ({ id: v.id, at: 0, v })), 12).slice(0, 8).map(x => x.v);
+    if (pickT.length) {
+      const chips = el("div", "tchips"); TR.forEach(t => { const a = el("a", "", t.name); a.href = "#/trend/" + encodeURIComponent(t.name); chips.append(a); });
+      const g = el("div", "grid"); g.append(...pickT.map(v => card(v)));
+      const h = el("h2", "sec", "🔥 いま はやっているもの"); m.append(h, chips, g); const sp = el("div"); sp.style.height = "36px"; m.append(sp);
+    }
+  }
   if (!genre) {
     // よく見るチャンネルの新着（再生履歴から）
     if (!taste) readTaste();
@@ -291,9 +334,38 @@ function discover(list, n, skipGenre) {
   for (let round = 0; out.length < n && round < 4; round++) for (const g of gs) { const v = byGenre[g][round]; if (v && out.length < n) out.push(v); }
   return out;
 }
+function trendPage(name) {
+  const m = $("main"), t = TR.find(x => x.name === name);
+  if (!t) { trendsPage(); return; }
+  const vs = trendVideos(t), longs = vs.filter(v => !v.short), shorts = vs.filter(v => v.short);
+  m.replaceChildren(el("h2", "sec", "🔥 " + t.name + (t.kind ? "（" + t.kind + "）" : "")));
+  if (t.about) m.append(el("p", "about", t.about));
+  if (longs.length) m.append(videoGrid(longs));
+  if (shorts.length) m.append(secShorts(), shortGrid(shorts));
+  if (!vs.length) m.append(el("p", "empty", "動画がまだありません"));
+}
+function trendsPage() {
+  const m = $("main"); m.replaceChildren(el("h2", "sec", "🔥 いま はやっているもの"));
+  if (!TR.length) { m.append(el("p", "empty", "まだありません")); return; }
+  TR.forEach(t => {
+    const vs = trendVideos(t).slice(0, 4); if (!vs.length) return;
+    const h = el("h2", "sec"); const a = el("a", "", t.name + " ›"); a.href = "#/trend/" + encodeURIComponent(t.name); h.append(a);
+    const g = el("div", "grid"); g.append(...vs.map(v => card(v, v.short ? {} : {}))); m.append(h, g);
+  });
+}
 function secShorts() { const h = el("h2", "sec"); h.innerHTML = ICON.shortsRed; h.append("ショート"); return h; }
 function shortsPage() { const m = $("main"); m.replaceChildren(secShorts(), shortGrid(mix(V.filter(v => v.short), 3))); }
 function related(v) {
+  if (v.trend) {
+    const t = TR.find(x => x.name === v.trend);
+    const sameTrend = t ? trendVideos(t).filter(x => x.id !== v.id) : [];
+    const rest = v.ch.ext ? mix(V.filter(x => !x.short), v.id.charCodeAt(0)).slice(0, 20) : relatedBase(v);
+    const ids = new Set(sameTrend.map(x => x.id));
+    return sameTrend.slice(0, 30).concat(rest.filter(x => !ids.has(x.id)));
+  }
+  return relatedBase(v);
+}
+function relatedBase(v) {
   const same = (byCh[v.ch.id] || []).filter(x => x.id !== v.id && x.short === v.short).sort((a, b) => b.at - a.at);
   const genre = mix(V.filter(x => x.ch.id !== v.ch.id && x.ch.genre === v.ch.genre && x.short === v.short), v.at % 997);
   // 別のカテゴリの、まだ見たことのないチャンネルからも少し混ぜる（偶然の出会い用）
@@ -325,16 +397,20 @@ function watch(id) {
   if (!v) { m.replaceChildren(el("p", "empty", "この動画は KidsTube では見られません")); return; }
   const rel = related(v);
   store.set("hist", [v.id, ...store.get("hist").filter(x => x !== v.id)].slice(0, 200));
-  if (!store.get("seen").includes(v.ch.id)) store.set("seen", [...store.get("seen"), v.ch.id]);
-  store.set("chlog", [v.ch.id, ...store.get("chlog")].slice(0, 300)); taste = null;
+  if (!v.ch.ext) {
+    if (!store.get("seen").includes(v.ch.id)) store.set("seen", [...store.get("seen"), v.ch.id]);
+    store.set("chlog", [v.ch.id, ...store.get("chlog")].slice(0, 300)); taste = null;
+  }
   // 見終わったら、関連動画の先頭から順に自動で次へ進む
   // （再生リストの先頭に今の動画を入れておかないと、関連動画の1本目から始まってしまう）
   const next = [v, ...rel.slice(0, 25)].map(x => x.id).join(",");
   const w = el("div", "watch"), L = el("div"), R = el("div", "side");
   L.append(playerFrame(EMBED() + "" + v.id + "?autoplay=1&rel=0&playsinline=1" + (next ? "&playlist=" + next : ""), v.short), el("h1", "", v.title));
-  const o = el("div", "owner"), a = el("a"); a.href = "#/ch/" + v.ch.id; a.append(img(v.ch.avatar, "ava"));
-  const n = el("a", "n", v.ch.name); n.href = a.href;
-  o.append(a, n, favBtn(v.ch)); L.append(o, el("div", "desc", sub(v)));
+  const o = el("div", "owner");
+  if (v.ch.ext) o.append(avatar(v.ch), el("span", "n", v.ch.name));
+  else { const n = el("a", "n", v.ch.name); n.href = "#/ch/" + v.ch.id; o.append(avatar(v.ch), n, favBtn(v.ch)); }
+  if (v.trend) { const t = el("a", "pill off", "🔥 " + v.trend); t.href = "#/trend/" + encodeURIComponent(v.trend); t.style.cssText = "display:inline-flex;align-items:center"; o.append(t); }
+  L.append(o, el("div", "desc", sub(v) || "いま はやっているもの"));
   R.append(...rel.map(x => card(x, { side: true })));
   w.append(L, R); m.replaceChildren(w);
 }
@@ -362,7 +438,7 @@ function searchPage(q) {
   if (!ws.length) { m.replaceChildren(el("p", "empty", "ことばを入れて検索してね")); return; }
   const hit = s => { const t = norm(s); return ws.every(w => t.includes(w)); };
   const cs = CH.filter(c => hit(c.name));
-  const vs = V.filter(v => hit(v.title + " " + v.ch.name)).sort((a, b) => (b.views || 0) * 0 + b.at - a.at);
+  const vs = V.concat(EXTV).filter(v => hit(v.title + " " + v.ch.name + " " + (v.trend || ""))).sort((a, b) => (b.views || 0) * 0 + b.at - a.at);
   m.replaceChildren();
   if (cs.length) m.append(el("h2", "sec", "チャンネル"), chRow(cs.slice(0, 24)));
   const longs = vs.filter(v => !v.short), shorts = vs.filter(v => v.short);
@@ -386,6 +462,7 @@ const ICON = {
   homeOn: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M4 10.5 12 4l8 6.5V20h-5.5v-6h-5v6H4z"/></svg>',
   shorts: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M15.5 3.6 7.3 8a4 4 0 0 0 .5 7.3l.9.3-.7.4a2.5 2.5 0 0 0 2.4 4.4L18.700 16a4 4 0 0 0-.5-7.300l-.9-.300.7-.4a2.500 2.500 0 0 0-2.500-4.400z"/><path d="M10.200 9.600v4.800l4.200-2.400z" fill="currentColor" stroke="none"/></svg>',
   subs: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3.500" y="9" width="17" height="11" rx="2"/><path d="M6 6.200h12M8 3.500h8"/><path d="M10.400 12v5l4.300-2.500z" fill="currentColor" stroke="none"/></svg>',
+  fire: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 3c.5 3-2 4.500-3.500 6.500C7 11.500 6.500 13 6.500 14.500a5.500 5.500 0 0 0 11 0c0-2-1-3.500-2-4.700-.3 1.200-1 2-2 2.400.6-2.700-.2-6.200-1.500-9.200z"/></svg>',
   me: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="9.700" r="3"/><path d="M6.200 18.300a6.500 6.500 0 0 1 11.600 0"/></svg>',
   cat: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 6h16M4 12h16M4 18h10"/></svg>',
   kids: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="5.500" width="18" height="13" rx="4"/><path d="M10.300 9.300v5.400l4.500-2.700z" fill="currentColor" stroke="none"/></svg>',
@@ -401,7 +478,7 @@ function nav() {
     a.append(i, el("span", "", label)); a.title = label; return a;
   };
   const home = item("home", "ホーム", "#/"); home.onclick = goHome;
-  n.append(home, item("shorts", "ショート", "#/shorts"), item("subs", "登録チャンネル", "#/fav"), item("me", "マイページ", "#/history"), el("hr"));
+  n.append(home, item("fire", "はやり", "#/trends"), item("shorts", "ショート", "#/shorts"), item("subs", "登録チャンネル", "#/fav"), item("me", "マイページ", "#/history"), el("hr"));
   const favs = store.get("fav").map(i => chById[i]).filter(Boolean).slice(0, 12);
   if (favs.length) {
     n.append(el("h3", "", "登録チャンネル"));
@@ -426,6 +503,8 @@ function route() {
   else if (p[0] === "ch") channel(p[1]);
   else if (p[0] === "cat") home(p.slice(1).join("/"));
   else if (p[0] === "shorts") shortsPage();
+  else if (p[0] === "trend") trendPage(p.slice(1).join("/"));
+  else if (p[0] === "trends") trendsPage();
   else if (p[0] === "fav") favPage();
   else if (p[0] === "history") histPage();
   else if (p[0] === "q") searchPage(p.slice(1).join("/"));
@@ -454,7 +533,7 @@ function goHome(e) {
 document.querySelector(".logo").onclick = goHome;
 window.addEventListener("hashchange", route);
 // 許可リストと動画データは毎回最新を読み込む
-Promise.all([load("channels.js"), load("videos.js")]).then(() => { prepare(); route(); });
+Promise.all([load("channels.js"), load("videos.js"), load("trends.js")]).then(() => { prepare(); route(); });
 </script>
 </body>
 </html>
