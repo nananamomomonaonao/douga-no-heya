@@ -656,5 +656,13 @@ window.CHANNELS = [
   {"name": "Mei Yu", "id": "UCFf_ebUsE0QHD9AMVTD_npQ", "genre": "つくる・おえかき", "avatar": "https://yt3.googleusercontent.com/ytc/AIdro_lGzNlhMviXXOb8B7LNzPTMon38px9-nqMjcoJwWh8ZqZA=s176-c-k-c0x00ffffff-no-rj"},
   {"name": "ADCArtAttack", "id": "UCwOnsTahdMw43ubKotlouIA", "genre": "つくる・おえかき", "avatar": "https://yt3.googleusercontent.com/n7MO35HM4Uf4jxV1GpxRBCDS7wpVj90zly4dwAKWAwzDctcnkwQIHNjA9eV4XLrxUM40k3Tp3w=s176-c-k-c0x00ffffff-no-rj"},
   {"name": "SuperRaeDizzle", "id": "UCKy8UiG_NjxDl581q1sU5zw", "genre": "つくる・おえかき", "avatar": "https://yt3.googleusercontent.com/ytc/AIdro_nYdBRPnye35NP9qmX0eU409x-P-XFvhZX4TH6iH2mmEzM=s176-c-k-c0x00ffffff-no-rj"},
-  {"name": "DrawingWiffWaffles", "id": "UCBARESDB1dvUXUHZwIVHUdw", "genre": "つくる・おえかき", "avatar": "https://yt3.googleusercontent.com/StpeiaA8HrbfVDNDwH-Kyn8NMaCxhDUd51U9cHWTwIsXLVpzqaGRVQommPPx8Y6r_ChGQgdBkQ=s176-c-k-c0x00ffffff-no-rj"}
+  {"name": "DrawingWiffWaffles", "id": "UCBARESDB1dvUXUHZwIVHUdw", "genre": "つくる・おえかき", "avatar": "https://yt3.googleusercontent.com/StpeiaA8HrbfVDNDwH-Kyn8NMaCxhDUd51U9cHWTwIsXLVpzqaGRVQommPPx8Y6r_ChGQgdBkQ=s176-c-k-c0x00ffffff-no-rj"},
+  {"name": "AKB48", "id": "UCxjXU89x6owat9dA8Z-bzdw", "genre": "うた", "avatar": "https://yt3.googleusercontent.com/gz2f-QKFrNBl4IYKCmMb5Z97cfQOzj_Y4My5lNYIYu8VVff88MKNzj-m5O7WEQNrvtkt-oIMoOQ=s176-c-k-c0x00ffffff-no-rj"},
+  {"name": "LE SSERAFIM", "id": "UCs-QBT4qkj_YiQw1ZntDO3g", "genre": "うた", "avatar": "https://yt3.googleusercontent.com/eLnV_fwQLMbjKZPkA8QzzLusBAHgG3cQ-QmQQ6nMSXYXanHgPL6snGMAvb3pst8QC8mVgiLKsQ=s176-c-k-c0x00ffffff-no-rj"},
+  {"name": "KATSEYE", "id": "UCA61H4fWOMHikLcUFKyQUog", "genre": "うた", "avatar": "https://yt3.googleusercontent.com/zPT-8po4FM5aAeOBcHBpfy1bh3Ulks7p1SvHkbi1zSPlRWWte_xSi4EoOt_eCrOCqBgxJwIwsg=s176-c-k-c0x00ffffff-no-rj"},
+  {"name": "SixTONES", "id": "UCwjAKjycHHT1QzHrQN5Stww", "genre": "うた", "avatar": "https://yt3.googleusercontent.com/kQ683icEJighOIcEJ9Hh54rSurBA3MYIV6FVUzAdLjlWwnvS97sMDfeDzUX3CrCbEf_cW65GmFg=s176-c-k-c0x00ffffff-no-rj"},
+  {"name": "King & Prince", "id": "UCSxwcQnzA5K6DvofvBn6ATA", "genre": "うた", "avatar": "https://yt3.googleusercontent.com/EwnlXk7994L4il5z8HyfhJdkFryIPmdtJgjZmRD5ameRHlITXI-fbYcG7dkjnP4mIWBAp-C0jg=s176-c-k-c0x00ffffff-no-rj"},
+  {"name": "BLACKPINK", "id": "UCOmHUn--16B90oW2L6FRR3A", "genre": "うた", "avatar": "https://yt3.googleusercontent.com/U3VrCkKjzTpQ3VYv4SCPjNfDHeJV-swGNnhLYhr0nV4lZz_GVUNzK4EB-HFRfKv9S5VNh14uAg=s176-c-k-c0x00ffffff-no-rj"},
+  {"name": "モーニング娘。", "id": "UCoKXb95K5h3sME3c9OCBaeA", "genre": "うた", "avatar": "https://yt3.googleusercontent.com/T7wXSoldDQSSQYOuDiPJqReKvW4uZJH6Ny5gVei5pDCB6gxU6NadeBLsuv6CDVZ0NjxoQ-_s6g=s176-c-k-c0x00ffffff-no-rj"},
+  {"name": "Momoiro Clover Z Channel", "id": "UC6YNWTm6zuMFsjqd0PO3G-Q", "genre": "うた", "avatar": "https://yt3.googleusercontent.com/30INKCvuE5Ek1KGY30od7BKFIaBApzptPfC3Z3MF9FD1nJ1_HszeDHJmdCbFoF2woiqWBsbj=s176-c-k-c0x00ffffff-no-rj"}
 ];
