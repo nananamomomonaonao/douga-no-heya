@@ -1,6 +1,6 @@
 """許可リストの各チャンネルの新着フィード(RSS)から動画一覧を集め、videos.js を作る。
-1チャンネルあたり最新15本まで。使い方: python3 tools/gen_videos.py（GitHub Actions からは毎日自動で実行）"""
-import html, json, os, re, time, urllib.request
+1チャンネルあたり、ショートを除いた動画を最新15本＋ショートを少し。使い方: python3 tools/gen_videos.py（GitHub Actions からは毎日自動で実行）"""
+import html, json, os, re, time, urllib.error, urllib.request
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 
@@ -16,17 +16,19 @@ ng_path = os.path.join(ROOT, "ng_words.txt")
 ng_pats = [l.strip() for l in open(ng_path, encoding="utf-8") if l.strip() and not l.startswith("#")] if os.path.exists(ng_path) else []
 NG = re.compile("|".join("(?:%s)" % p for p in ng_pats), re.I) if ng_pats else None
 
-def fetch(c):
-    url = "https://www.youtube.com/feeds/videos.xml?channel_id=" + c["id"]
+def get_feed(url):
     for attempt in range(3):
         try:
-            x = urllib.request.urlopen(urllib.request.Request(url, headers={"User-Agent": UA}), timeout=25).read().decode("utf-8", "replace")
-            break
-        except Exception:
-            x = None
+            return urllib.request.urlopen(urllib.request.Request(url, headers={"User-Agent": UA}), timeout=25).read().decode("utf-8", "replace")
+        except urllib.error.HTTPError as e:
+            if e.code == 404:
+                return ""            # その種類の動画が1本もないチャンネル
             time.sleep(1 + attempt)
-    if x is None:
-        return None
+        except Exception:
+            time.sleep(1 + attempt)
+    return None
+
+def parse(x):
     out = []
     for e in re.findall(r"<entry>(.*?)</entry>", x, re.S):
         vid = re.search(r"<yt:videoId>([\w-]{11})</yt:videoId>", e)
@@ -40,6 +42,24 @@ def fetch(c):
         out.append([vid.group(1), html.unescape(title.group(1)).strip(), ts,
                     1 if link and "/shorts/" in link.group(1) else 0, int(views.group(1)) if views else 0])
     return out
+
+LONGS, SHORTS = 15, 6   # 1チャンネルあたり：ふつうの動画を最新15本＋ショートを少し
+
+def fetch(c):
+    # ふつうの新着フィード（ショートも生配信も混ざる）と、長い動画だけのフィード（UULF…）の両方を見る。
+    # ショートを除いた動画を最新15本そろえるため。ショートしかないチャンネルは、ショートを最新15本。
+    main = get_feed("https://www.youtube.com/feeds/videos.xml?channel_id=" + c["id"])
+    if main is None:
+        return None
+    lf = get_feed("https://www.youtube.com/feeds/videos.xml?playlist_id=UULF" + c["id"][2:]) or ""
+    a = parse(main)
+    longs = {v[0]: v for v in parse(lf)}
+    for v in a:
+        if not v[3]:
+            longs.setdefault(v[0], v)
+    longs = sorted(longs.values(), key=lambda v: -v[2])[:LONGS]
+    shorts = [v for v in a if v[3]]
+    return longs + shorts[:SHORTS] if longs else shorts[:LONGS]
 
 with ThreadPoolExecutor(8) as ex:
     res = list(ex.map(fetch, channels))
