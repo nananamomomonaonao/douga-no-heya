@@ -114,6 +114,10 @@ const store = {
   get(k) { try { return JSON.parse(localStorage.getItem("dh_" + k) || "[]"); } catch (e) { return []; } },
   set(k, v) { try { localStorage.setItem("dh_" + k, JSON.stringify(v)); } catch (e) {} },
 };
+// 埋め込みの方式。「CMなしモード」がオンのブラウザでは、YouTubeにログイン中のアカウント（プレミアム）で再生する。
+// オフのときはログイン情報を使わない方式（CMが出る）。設定はこのブラウザだけに保存される。
+const premium = () => { try { return localStorage.getItem("dh_premium") === "1"; } catch (e) { return false; } };
+const EMBED = () => premium() ? "https://www.youtube.com/embed/" : "https://www.youtube-nocookie.com/embed/";
 let CH = [], chById = {}, V = [], vById = {}, byCh = {}, GENRES = [];
 const PAGE = 48;
 
@@ -262,7 +266,7 @@ function watch(id) {
   // （再生リストの先頭に今の動画を入れておかないと、関連動画の1本目から始まってしまう）
   const next = [v, ...rel.slice(0, 25)].map(x => x.id).join(",");
   const w = el("div", "watch"), L = el("div"), R = el("div", "side");
-  L.append(playerFrame("https://www.youtube-nocookie.com/embed/" + v.id + "?autoplay=1&rel=0&playsinline=1" + (next ? "&playlist=" + next : ""), v.short), el("h1", "", v.title));
+  L.append(playerFrame(EMBED() + "" + v.id + "?autoplay=1&rel=0&playsinline=1" + (next ? "&playlist=" + next : ""), v.short), el("h1", "", v.title));
   const o = el("div", "owner"), a = el("a"); a.href = "#/ch/" + v.ch.id; a.append(img(v.ch.avatar, "ava"));
   const n = el("a", "n", v.ch.name); n.href = a.href;
   o.append(a, n, favBtn(v.ch)); L.append(o, el("div", "desc", sub(v)));
@@ -276,7 +280,7 @@ function channel(id) {
   const h = el("div", "chead"), b = el("div"), btns = el("div", "owner");
   const all = el("button", "pill off", "▶ ぜんぶの動画を見る");
   const holder = el("div");
-  all.onclick = () => { holder.replaceChildren(playerFrame("https://www.youtube-nocookie.com/embed/videoseries?list=UU" + c.id.slice(2) + "&rel=0&autoplay=1"), el("p", "s", "ほかの動画は、プレーヤー右下の「その他の動画」からえらべます。")); holder.scrollIntoView({ block: "center" }); };
+  all.onclick = () => { holder.replaceChildren(playerFrame(EMBED() + "videoseries?list=UU" + c.id.slice(2) + "&rel=0&autoplay=1"), el("p", "s", "ほかの動画は、プレーヤー右下の「その他の動画」からえらべます。")); holder.scrollIntoView({ block: "center" }); };
   btns.append(favBtn(c), all);
   b.append(el("h1", "", c.name), el("div", "s", c.genre), btns);
   h.append(img(c.avatar.replace("=s176-", "=s240-"), "ava"), b);
@@ -324,6 +328,10 @@ function nav() {
   n.append(el("h3", "", "カテゴリ"));
   GENRES.forEach(g => n.append(item("▸", g, "#/cat/" + encodeURIComponent(g))));
   n.append(el("hr"), item("🧒", "YouTube Kids をひらく", "https://www.youtubekids.com/", true));
+  const sw = el("a"); sw.href = "#"; sw.append(el("span", "e", "⚙"), document.createTextNode("CMなしモード：" + (premium() ? "オン" : "オフ")));
+  sw.title = "オンにすると、このブラウザでYouTubeにログインしているアカウント（プレミアム）で再生します";
+  sw.onclick = e => { e.preventDefault(); try { localStorage.setItem("dh_premium", premium() ? "0" : "1"); } catch (err) {} route(); };
+  n.append(sw);
 }
 function route() {
   const p = decodeURIComponent(location.hash.replace(/^#\/?/, "")).split("/");
