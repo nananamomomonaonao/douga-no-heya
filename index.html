@@ -115,8 +115,9 @@ const store = {
   set(k, v) { try { localStorage.setItem("dh_" + k, JSON.stringify(v)); } catch (e) {} },
 };
 // 埋め込みの方式。「CMなしモード」がオンのブラウザでは、YouTubeにログイン中のアカウント（プレミアム）で再生する。
-// オフのときはログイン情報を使わない方式（CMが出る）。設定はこのブラウザだけに保存される。
-const premium = () => { try { return localStorage.getItem("dh_premium") === "1"; } catch (e) { return false; } };
+// オフにするとログイン情報を使わない方式（CMが出る）になる。設定はこのブラウザだけに保存される。
+// 何も設定していないブラウザではオン（YouTube本体をブロックしない運用になったため）。
+const premium = () => { try { return localStorage.getItem("dh_premium") !== "0"; } catch (e) { return true; } };
 const EMBED = () => premium() ? "https://www.youtube.com/embed/" : "https://www.youtube-nocookie.com/embed/";
 let CH = [], chById = {}, V = [], vById = {}, byCh = {}, GENRES = [];
 const PAGE = 48;
