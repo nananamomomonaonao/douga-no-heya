@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<title>どうがのへや</title>
+<style>
+  :root {
+    --bg: #f4f6fb; --card: #ffffff; --ink: #1d2433; --sub: #5b6578;
+    --line: #dfe4ee; --accent: #2f6fed; --accent-ink: #ffffff;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #12151c; --card: #1c212c; --ink: #eef1f7; --sub: #a2abbd;
+            --line: #2c3342; --accent: #6b9bff; --accent-ink: #0d1220; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+         font-family: "Hiragino Maru Gothic ProN", "Hiragino Sans", sans-serif; }
+  header { display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+           padding: 16px 20px; border-bottom: 1px solid var(--line); background: var(--card); }
+  h1 { font-size: 20px; margin: 0; margin-right: auto; }
+  input[type=search] { font: inherit; padding: 8px 12px; border-radius: 999px;
+           border: 1px solid var(--line); background: var(--bg); color: var(--ink); width: min(260px, 100%); }
+  .chips { display: flex; gap: 8px; flex-wrap: wrap; padding: 12px 20px 0; }
+  .chip { font: inherit; font-size: 14px; padding: 6px 14px; border-radius: 999px; cursor: pointer;
+          border: 1px solid var(--line); background: var(--card); color: var(--ink); }
+  .chip[aria-pressed=true] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+  main { padding: 16px 20px 40px; }
+  .grid { display: grid; gap: 14px; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+  .tile { font: inherit; color: inherit; text-align: center; cursor: pointer; padding: 16px 10px;
+          background: var(--card); border: 1px solid var(--line); border-radius: 16px; }
+  .tile:hover, .tile:focus-visible { border-color: var(--accent); outline: none; }
+  .tile img, .tile .ph { width: 88px; height: 88px; border-radius: 50%; object-fit: cover; display: block; margin: 0 auto 10px; }
+  .tile .ph { background: var(--accent); color: var(--accent-ink); font-size: 34px; line-height: 88px; }
+  .tile .name { font-weight: 700; font-size: 15px; overflow-wrap: anywhere; min-height: 2.9em;
+                display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+  .tile .genre { font-size: 12px; color: var(--sub); margin-top: 4px; }
+  .empty { color: var(--sub); padding: 40px 0; text-align: center; }
+  #player { display: none; }
+  #player.on { display: block; }
+  .bar { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+  .back { font: inherit; padding: 8px 16px; border-radius: 999px; cursor: pointer;
+          border: 0; background: var(--accent); color: var(--accent-ink); font-weight: 700; }
+  .frame { position: relative; width: 100%; max-width: 1100px; aspect-ratio: 16 / 9; background: #000;
+           border-radius: 14px; overflow: hidden; }
+  .frame iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+  .hint { color: var(--sub); font-size: 13px; margin-top: 10px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>どうがのへや</h1>
+  <input id="q" type="search" placeholder="チャンネルをさがす" aria-label="チャンネルをさがす">
+</header>
+<div class="chips" id="chips"></div>
+<main>
+  <section id="list"><div class="grid" id="grid"></div></section>
+  <section id="player">
+    <div class="bar">
+      <button class="back" id="back">← もどる</button>
+      <strong id="now"></strong>
+    </div>
+    <div class="frame" id="frame"></div>
+    <p class="hint">ほかの動画は、プレーヤー右下の「その他の動画」からえらべます。</p>
+  </section>
+</main>
+<script src="channels.js"></script>
+<script>
+  const all = (window.CHANNELS || []).filter(c => /^UC[\w-]{22}$/.test(c.id));
+  const $ = id => document.getElementById(id);
+  let genre = "すべて";
+
+  function renderChips() {
+    const used = new Set(all.map(c => c.genre).filter(Boolean));
+    const ordered = (window.GENRES || []).filter(g => used.has(g));
+    const genres = ["すべて", ...ordered, ...[...used].filter(g => !ordered.includes(g))];
+    $("chips").replaceChildren(...genres.map(g => {
+      const b = document.createElement("button");
+      b.className = "chip"; b.textContent = g; b.setAttribute("aria-pressed", g === genre);
+      b.onclick = () => { genre = g; renderChips(); renderGrid(); };
+      return b;
+    }));
+  }
+
+  function renderGrid() {
+    const q = $("q").value.trim().toLowerCase();
+    const items = all.filter(c => (genre === "すべて" || c.genre === genre) &&
+                                  (!q || c.name.toLowerCase().includes(q)));
+    if (!items.length) {
+      const e = document.createElement("div"); e.className = "empty"; e.textContent = "チャンネルがありません";
+      $("grid").replaceChildren(e); return;
+    }
+    $("grid").replaceChildren(...items.map(c => {
+      const b = document.createElement("button"); b.className = "tile";
+      let pic;
+      if (c.avatar) { pic = document.createElement("img"); pic.src = c.avatar; pic.alt = ""; pic.width = 88; pic.height = 88; b.title = c.name; pic.referrerPolicy = "no-referrer"; }
+      else { pic = document.createElement("div"); pic.className = "ph"; pic.textContent = c.name.slice(0, 1); }
+      const n = document.createElement("div"); n.className = "name"; n.textContent = c.name;
+      const g = document.createElement("div"); g.className = "genre"; g.textContent = c.genre || "";
+      b.append(pic, n, g); b.onclick = () => play(c);
+      return b;
+    }));
+  }
+
+  function play(c) {
+    const f = document.createElement("iframe");
+    // UC… のチャンネルIDを UU… に変えると、そのチャンネルの全アップロード動画の再生リストになる
+    f.src = "https://www.youtube-nocookie.com/embed/videoseries?list=UU" + c.id.slice(2) + "&rel=0";
+    f.allow = "autoplay; encrypted-media; fullscreen; picture-in-picture";
+    f.allowFullscreen = true; f.title = c.name;
+    f.referrerPolicy = "strict-origin-when-cross-origin";
+    $("frame").replaceChildren(f);
+    $("now").textContent = c.name;
+    $("list").style.display = "none"; $("chips").style.display = "none"; $("player").classList.add("on");
+    window.scrollTo(0, 0);
+  }
+
+  $("back").onclick = () => {
+    $("frame").replaceChildren();
+    $("player").classList.remove("on"); $("list").style.display = ""; $("chips").style.display = "";
+  };
+  $("q").oninput = renderGrid;
+  renderChips(); renderGrid();
+</script>
+</body>
+</html>
