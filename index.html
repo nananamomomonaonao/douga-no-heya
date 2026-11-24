@@ -28,13 +28,13 @@
   form.search input:focus { border-color:#1c62b9; }
   form.search button { width:64px; height:40px; border:1px solid var(--line); border-radius:0 20px 20px 0; background:var(--bg2); display:grid; place-items:center; }
   /* サイドバー：ふだんは細いアイコンの列（YouTubeと同じ）、メニューボタンで広げる */
-  nav { position:fixed; top:56px; bottom:0; left:0; width:72px; overflow-y:auto; padding:0 4px; background:var(--bg); z-index:10; scrollbar-width:none; }
-  nav a { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:6px; height:74px; border-radius:10px; font-size:10px; white-space:nowrap; overflow:hidden; }
+  nav { position:fixed; top:56px; bottom:0; left:0; width:72px; overflow-y:auto; padding:0; background:var(--bg); z-index:10; scrollbar-width:none; }
+  nav a { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:6px; height:74px; border-radius:10px; font-size:10px; letter-spacing:-.4px; white-space:nowrap; overflow:hidden; }
   nav a:hover { background:var(--bg2); }
   nav a svg { width:24px; height:24px; flex:none; }
   nav .x, nav h3, nav hr { display:none; }
   body.wide nav { width:240px; padding:12px; }
-  body.wide nav a { flex-direction:row; justify-content:flex-start; gap:24px; height:40px; padding:0 12px; font-size:14px; }
+  body.wide nav a { flex-direction:row; justify-content:flex-start; gap:24px; height:40px; padding:0 12px; font-size:14px; letter-spacing:0; }
   body.wide nav a.on { background:var(--bg2); font-weight:500; }
   body.wide nav .x { display:flex; }
   body.wide nav h3 { display:block; font-size:16px; margin:10px 12px 6px; }
@@ -214,9 +214,12 @@ function weight(v) {
   if (taste.seenV.has(v.id)) w *= 0.15;                    // もう見た動画は下げる
   return w;
 }
-// 並びは数時間ごとに変わる。新しい動画・重みの大きい動画ほど上に来やすく、同じチャンネルが続かないようにする。
+// 並びは、ページを開き直す・更新する・左上のロゴやホームを押すたびに変わる（SEED を引き直す）。
+// 新しい動画・重みの大きい動画ほど上に来やすく、同じチャンネルが続かないようにする。
+let SEED = Math.floor(Math.random() * 1e6);
+const reshuffle = () => { SEED = Math.floor(Math.random() * 1e6); };
 function mix(list, salt) {
-  let s = Math.floor(Date.now() / 3.6e6 / 6) * 131 + (salt || 0) + 7;
+  let s = SEED * 131 + (salt || 0) + 7;
   const rnd = () => (s = (s * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff;
   const now = Date.now() / 1000;
   const scored = list.map(v => [rnd() * (v.ch ? weight(v) : 1) / (1 + (now - v.at) / 86400 / 20), v]).sort((a, b) => b[0] - a[0]);
@@ -393,7 +396,8 @@ function nav() {
     const i = el("span"); i.style.display = "contents"; i.innerHTML = ICON[isOn(href) && ICON[icon + "On"] ? icon + "On" : icon];
     a.append(i, el("span", "", label)); a.title = label; return a;
   };
-  n.append(item("home", "ホーム", "#/"), item("shorts", "ショート", "#/shorts"), item("subs", "登録チャンネル", "#/fav"), item("me", "マイページ", "#/history"), el("hr"));
+  const home = item("home", "ホーム", "#/"); home.onclick = goHome;
+  n.append(home, item("shorts", "ショート", "#/shorts"), item("subs", "登録チャンネル", "#/fav"), item("me", "マイページ", "#/history"), el("hr"));
   const favs = store.get("fav").map(i => chById[i]).filter(Boolean).slice(0, 12);
   if (favs.length) {
     n.append(el("h3", "", "登録チャンネル"));
@@ -439,6 +443,11 @@ try { if (localStorage.getItem("dh_wide") === "1") document.body.classList.add("
     try { r.start(); } catch (e) { mic.classList.remove("rec"); }
   };
 })();
+function goHome(e) {
+  e.preventDefault(); reshuffle();
+  if (/^#?\/?$/.test(location.hash)) route(); else location.hash = "#/";
+}
+document.querySelector(".logo").onclick = goHome;
 window.addEventListener("hashchange", route);
 // 許可リストと動画データは毎回最新を読み込む
 Promise.all([load("channels.js"), load("videos.js")]).then(() => { prepare(); route(); });
