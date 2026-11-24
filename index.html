@@ -255,6 +255,9 @@ function favBtn(ch) {
 function playerFrame(src, short) {
   const p = el("div", "player" + (short ? " short" : "")), f = el("iframe");
   f.src = src; f.allow = "autoplay; encrypted-media; fullscreen; picture-in-picture"; f.allowFullscreen = true;
+  // プレーヤーの中のボタン（「見る YouTube」、タイトル、ロゴなど）からYouTube本体へ飛べないようにする。
+  // allow-popups と allow-top-navigation を付けないので、新しいタブを開く・ページごと移動する操作が効かなくなる。
+  f.setAttribute("sandbox", "allow-scripts allow-same-origin allow-presentation");
   f.referrerPolicy = "strict-origin-when-cross-origin"; f.title = "動画プレーヤー"; p.append(f); return p;
 }
 function watch(id) {
