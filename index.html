@@ -228,6 +228,10 @@ const GENRE_W = { "けんちく": 2.2, "おえかき": 2.0, "ものづくり・�
 // タイトルにこの種の言葉がある動画は出やすくする（建築・ものづくり／恋バナ／ホラー／お絵かき／おしゃれ／スクイーズ・ASMR・大食い／おもちゃ・グッズ）
 const TITLE_W = 2.2;
 const TITLE_RE = /建築|巨大|作ってみた|つくってみた|ミニチュア|DIY|build|house|villa|mansion|恋バナ|恋愛|好きな人|好きなタイプ|告白|カップル|女子会|お泊り|お泊まり|ホラー|怖い|こわい|死ぬ|脱出|都市伝説|心霊|怪談|描いてみた|お絵かき|お絵描き|イラスト|メイキング|色塗り|色ぬり|漫画家|描き方|ヘアアレンジ|ネイル|メイク|コーデ|スクイーズ|ASMR|咀嚼音|大食い|デカ盛り|開封|シール|ガチャ|購入品/i;
+const FAV_W = 10;   // channels.js で "pick": 2 ＝ 本人がいちばん好きと言ったチャンネル（みそらくん、ちろぴの、ぜるふぃー）
+// いちばん好きな3チャンネルに近い題材（ロブロックス、マイクラ、ホラーゲーム、買ってみた・TikTok検証・不気味なもの）
+const FAV_TITLE_W = 1.8;
+const FAV_RE = /ロブロックス|ROBLOX|マイクラ|マインクラフト|ホラーゲーム|買ってみた|TikTok|ティックトック|AI生成|不気味|検証|雑学|総集編/i;
 const PICK_W = 4;   // channels.js で "pick": 1 が付いたチャンネル（ちろぴの、カレコレ、しなこ など）
 // 再生履歴から、よく見るチャンネルとカテゴリの割合を出す（最近見たものほど重く数える）
 let taste = null;
@@ -239,8 +243,9 @@ function readTaste() {
 }
 function weight(v) {
   if (!taste) readTaste();
-  let w = (GENRE_W[v.ch.genre] || 1) * (v.ch.pick ? PICK_W : 1);
+  let w = (GENRE_W[v.ch.genre] || 1) * (v.ch.pick === 2 ? FAV_W : v.ch.pick ? PICK_W : 1);
   if (TITLE_RE.test(v.title)) w *= TITLE_W;
+  if (FAV_RE.test(v.title)) w *= FAV_TITLE_W;
   // 履歴が少ないうちは控えめに、10本ほど見たらしっかり効かせる
   const k = Math.min(1, taste.n / 10);
   w *= 1 + k * (6 * (taste.ch[v.ch.id] || 0) + 2.5 * (taste.g[v.ch.genre] || 0));
