@@ -208,17 +208,38 @@ function home(genre) {
     row.append(...shorts.slice(0, 12).map(v => card(v, { short: true }))); m.append(h, row);
     const sp = el("div"); sp.style.height = "32px"; m.append(sp);
   }
+  if (!genre) {
+    // あたらしく入ったチャンネル（追加から4週間）
+    const fresh = CH.filter(c => c.added && Date.now() - Date.parse(c.added) < 28 * 864e5);
+    if (fresh.length) m.append(el("h2", "sec", "あたらしく入ったチャンネル"), chRow(fresh.slice(0, 16)));
+    // あたらしい出会い：まだ見たことのないチャンネルから、カテゴリをばらけさせて出す
+    const meet = discover(longs, 8);
+    if (meet.length) { const g = el("div", "grid"); g.append(...meet.map(v => card(v))); m.append(el("h2", "sec", "あたらしい出会い"), g); const sp = el("div"); sp.style.height = "36px"; m.append(sp); }
+  }
   m.append(videoGrid(longs.slice(8)));
   if (genre) { m.append(el("h2", "sec", genre + " のチャンネル"), chRow(CH.filter(c => c.genre === genre))); }
+}
+// まだ見たことのないチャンネルの動画を、カテゴリが偏らないように n 本えらぶ
+function discover(list, n, skipGenre) {
+  const seen = new Set(store.get("seen")), usedCh = new Set(), byGenre = {};
+  list.forEach(v => { if (seen.has(v.ch.id) || v.ch.genre === skipGenre || usedCh.has(v.ch.id)) return; usedCh.add(v.ch.id); (byGenre[v.ch.genre] = byGenre[v.ch.genre] || []).push(v); });
+  const gs = mix(Object.keys(byGenre).map((g, i) => ({ g, at: Date.now() / 1000 - i })), 5).map(x => x.g), out = [];
+  for (let round = 0; out.length < n && round < 4; round++) for (const g of gs) { const v = byGenre[g][round]; if (v && out.length < n) out.push(v); }
+  return out;
 }
 function shortsPage() { const m = $("main"); m.replaceChildren(el("h2", "sec", "ショート"), shortGrid(mix(V.filter(v => v.short), 3))); }
 function related(v) {
   const same = (byCh[v.ch.id] || []).filter(x => x.id !== v.id && x.short === v.short).sort((a, b) => b.at - a.at);
   const genre = mix(V.filter(x => x.ch.id !== v.ch.id && x.ch.genre === v.ch.genre && x.short === v.short), v.at % 997);
-  const other = mix(V.filter(x => x.ch.genre !== v.ch.genre && !x.short), v.at % 991).slice(0, 6);
-  const out = []; let i = 0, j = 0;                       // 同じチャンネルと同じジャンルを交互に
-  while (out.length < 40 && (i < same.length || j < genre.length)) { if (i < same.length && (out.length % 3 !== 2 || j >= genre.length)) out.push(same[i++]); else if (j < genre.length) out.push(genre[j++]); }
-  return out.concat(other);
+  // 別のカテゴリの、まだ見たことのないチャンネルからも少し混ぜる（偶然の出会い用）
+  const other = v.short ? [] : discover(mix(V.filter(x => !x.short), v.at % 991), 8, v.ch.genre);
+  const out = []; let i = 0, j = 0, k = 0;                // 同じチャンネルと同じジャンルを交互に、5本に1本は別カテゴリ
+  while (out.length < 46 && (i < same.length || j < genre.length)) {
+    if (out.length % 5 === 4 && k < other.length) out.push(other[k++]);
+    else if (i < same.length && (out.length % 3 !== 2 || j >= genre.length)) out.push(same[i++]);
+    else if (j < genre.length) out.push(genre[j++]);
+  }
+  return out.concat(other.slice(k));
 }
 function favBtn(ch) {
   const b = el("button", "pill");
@@ -236,6 +257,7 @@ function watch(id) {
   if (!v) { m.replaceChildren(el("p", "empty", "この動画は どうがのへや では見られません")); return; }
   const rel = related(v);
   store.set("hist", [v.id, ...store.get("hist").filter(x => x !== v.id)].slice(0, 200));
+  if (!store.get("seen").includes(v.ch.id)) store.set("seen", [...store.get("seen"), v.ch.id]);
   // 見終わったら、関連動画の先頭から順に自動で次へ進む
   // （再生リストの先頭に今の動画を入れておかないと、関連動画の1本目から始まってしまう）
   const next = [v, ...rel.slice(0, 25)].map(x => x.id).join(",");

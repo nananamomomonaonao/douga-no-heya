@@ -11,6 +11,11 @@ UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/
 src = open(os.path.join(ROOT, "channels.js"), encoding="utf-8").read()
 channels = json.loads(re.search(r"window\.CHANNELS = (\[.*\]);", src, re.S).group(1))
 
+# タイトルの除外ワード（ng_words.txt、1行1つの正規表現）
+ng_path = os.path.join(ROOT, "ng_words.txt")
+ng_pats = [l.strip() for l in open(ng_path, encoding="utf-8") if l.strip() and not l.startswith("#")] if os.path.exists(ng_path) else []
+NG = re.compile("|".join("(?:%s)" % p for p in ng_pats), re.I) if ng_pats else None
+
 def fetch(c):
     url = "https://www.youtube.com/feeds/videos.xml?channel_id=" + c["id"]
     for attempt in range(3):
@@ -39,7 +44,7 @@ def fetch(c):
 with ThreadPoolExecutor(8) as ex:
     res = list(ex.map(fetch, channels))
 
-ids, videos, failed = [], [], []
+ids, videos, failed, dropped = [], [], [], 0
 for c, r in zip(channels, res):
     if r is None:
         failed.append(c["name"])
@@ -49,6 +54,9 @@ for c, r in zip(channels, res):
     ids.append(c["id"])
     ci = len(ids) - 1
     for v in r:
+        if NG and NG.search(v[1]):
+            dropped += 1
+            continue
         videos.append([v[0], v[1], ci, v[2], v[3], v[4]])
 
 # 取得できたチャンネルが少なすぎるときは、YouTube側に弾かれた可能性が高いので上書きしない
@@ -62,4 +70,5 @@ with open(os.path.join(ROOT, "videos.js"), "w", encoding="utf-8") as f:
     f.write("window.VIDEO_CH = " + json.dumps(ids) + ";\n")
     f.write("window.VIDEOS = [\n" + ",\n".join(json.dumps(v, ensure_ascii=False, separators=(",", ":")) for v in videos) + "\n];\n")
 print("チャンネル", len(channels), "取得できた", len(ids), "動画", len(videos), "ショート", sum(v[4] for v in videos))
+print("除外ワードで外した動画:", dropped)
 print("取得失敗:", failed)
