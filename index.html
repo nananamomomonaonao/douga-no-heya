@@ -172,12 +172,37 @@ function card(v, opt = {}) {
   } else b.append(el("div", "s", views(v.views) || ago(v.at)));
   m.append(b); c.append(thumb(v), m); c.title = v.title; return c;
 }
-// その日ごとに並びが変わる、新しい動画ほど上に来やすいシャッフル
+// ---- おすすめの重みづけ ----
+// カテゴリごとの出やすさ（女の子向けの分野を多めに）。数字が大きいほどトップやおすすめに出やすい。
+const GENRE_W = { "おしゃれ": 1.9, "ものづくり・おかし": 1.7, "おえかき": 1.6, "キャラクター": 1.6, "ダンス": 1.4, "歌い手・ボカロ": 1.3,
+  "アイドル・グループ": 1.2, "アニメ": 1.3, "けんちく": 1.3, "こわい話": 1.0, "ゲーム": 1.0, "エンタメ": 0.9, "VTuber": 0.8, "まなび・くらし": 0.6, "アーティスト": 0.5 };
+const PICK_W = 4;   // channels.js で "pick": 1 が付いたチャンネル（ちろぴの、カレコレ、しなこ など）
+// 再生履歴から、よく見るチャンネルとカテゴリの割合を出す（最近見たものほど重く数える）
+let taste = null;
+function readTaste() {
+  const log = store.get("chlog"), ch = {}, g = {}; let total = 0;
+  log.forEach((id, i) => { const c = chById[id]; if (!c) return; const w = Math.pow(0.985, i); ch[id] = (ch[id] || 0) + w; g[c.genre] = (g[c.genre] || 0) + w; total += w; });
+  if (total) { for (const k in ch) ch[k] /= total; for (const k in g) g[k] /= total; }
+  taste = { ch, g, n: log.length, seenV: new Set(store.get("hist")) };
+}
+function weight(v) {
+  if (!taste) readTaste();
+  let w = (GENRE_W[v.ch.genre] || 1) * (v.ch.pick ? PICK_W : 1);
+  // 履歴が少ないうちは控えめに、10本ほど見たらしっかり効かせる
+  const k = Math.min(1, taste.n / 10);
+  w *= 1 + k * (6 * (taste.ch[v.ch.id] || 0) + 2.5 * (taste.g[v.ch.genre] || 0));
+  if (taste.seenV.has(v.id)) w *= 0.15;                    // もう見た動画は下げる
+  return w;
+}
+// 並びは数時間ごとに変わる。新しい動画・重みの大きい動画ほど上に来やすく、同じチャンネルが続かないようにする。
 function mix(list, salt) {
   let s = Math.floor(Date.now() / 3.6e6 / 6) * 131 + (salt || 0) + 7;
   const rnd = () => (s = (s * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff;
   const now = Date.now() / 1000;
-  return list.map(v => [rnd() / (1 + (now - v.at) / 86400 / 20), v]).sort((a, b) => b[0] - a[0]).map(x => x[1]);
+  const scored = list.map(v => [rnd() * (v.ch ? weight(v) : 1) / (1 + (now - v.at) / 86400 / 20), v]).sort((a, b) => b[0] - a[0]);
+  const seen = {};
+  scored.forEach(x => { if (!x[1].ch) return; const n = seen[x[1].ch.id] = (seen[x[1].ch.id] || 0) + 1; x[0] /= 1 + 1.5 * (n - 1); });
+  return scored.sort((a, b) => b[0] - a[0]).map(x => x[1]);
 }
 function pager(box, list, make) {
   let n = 0; const more = el("button", "more", "もっと見る");
@@ -214,6 +239,13 @@ function home(genre) {
     const sp = el("div"); sp.style.height = "32px"; m.append(sp);
   }
   if (!genre) {
+    // よく見るチャンネルの新着（再生履歴から）
+    if (!taste) readTaste();
+    const favCh = Object.entries(taste.ch).sort((x, y) => y[1] - x[1]).slice(0, 6).map(x => x[0]);
+    if (taste.n >= 3 && favCh.length) {
+      const fresh = V.filter(v => favCh.includes(v.ch.id) && !v.short && !taste.seenV.has(v.id)).sort((x, y) => y.at - x.at).slice(0, 8);
+      if (fresh.length) { const g = el("div", "grid"); g.append(...fresh.map(v => card(v))); m.append(el("h2", "sec", "よく見るチャンネルの新着"), g); const sp = el("div"); sp.style.height = "36px"; m.append(sp); }
+    }
     // あたらしく入ったチャンネル（追加から4週間）
     const fresh = CH.filter(c => c.added && Date.now() - Date.parse(c.added) < 28 * 864e5);
     if (fresh.length) m.append(el("h2", "sec", "あたらしく入ったチャンネル"), chRow(fresh.slice(0, 16)));
@@ -266,6 +298,7 @@ function watch(id) {
   const rel = related(v);
   store.set("hist", [v.id, ...store.get("hist").filter(x => x !== v.id)].slice(0, 200));
   if (!store.get("seen").includes(v.ch.id)) store.set("seen", [...store.get("seen"), v.ch.id]);
+  store.set("chlog", [v.ch.id, ...store.get("chlog")].slice(0, 300)); taste = null;
   // 見終わったら、関連動画の先頭から順に自動で次へ進む
   // （再生リストの先頭に今の動画を入れておかないと、関連動画の1本目から始まってしまう）
   const next = [v, ...rel.slice(0, 25)].map(x => x.id).join(",");
@@ -338,6 +371,7 @@ function nav() {
   n.append(sw);
 }
 function route() {
+  taste = null;                                             // 履歴が変わっているかもしれないので、画面を出すたびに読み直す
   const p = decodeURIComponent(location.hash.replace(/^#\/?/, "")).split("/");
   document.body.classList.toggle("watching", p[0] === "watch");
   document.body.classList.remove("open");
