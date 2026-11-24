@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="referrer" content="strict-origin-when-cross-origin">
-<title>どうがのへや</title>
+<title>kidstube</title>
 <style>
   :root { --bg:#fff; --bg2:#f2f2f2; --hover:#e5e5e5; --ink:#0f0f0f; --sub:#606060; --line:#e5e5e5; --accent:#ff0033; --chip:#f2f2f2; --chip-on:#0f0f0f; --chip-on-ink:#fff; }
   @media (prefers-color-scheme: dark) {
@@ -98,7 +98,7 @@
 <body>
 <header>
   <button class="icon-btn" id="menu" aria-label="メニュー"><svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M3 6h18v1.5H3zm0 5.25h18v1.5H3zm0 5.25h18V18H3z"/></svg></button>
-  <a class="logo" href="#/"><i></i><b>どうがのへや</b></a>
+  <a class="logo" href="#/"><i></i><b>kidstube</b></a>
   <form class="search" id="search" role="search">
     <input id="q" type="search" placeholder="検索" aria-label="検索" autocomplete="off">
     <button aria-label="検索"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l5 5"/></svg></button>
@@ -254,7 +254,7 @@ function playerFrame(src, short) {
 }
 function watch(id) {
   const v = vById[id], m = $("main");
-  if (!v) { m.replaceChildren(el("p", "empty", "この動画は どうがのへや では見られません")); return; }
+  if (!v) { m.replaceChildren(el("p", "empty", "この動画は kidstube では見られません")); return; }
   const rel = related(v);
   store.set("hist", [v.id, ...store.get("hist").filter(x => x !== v.id)].slice(0, 200));
   if (!store.get("seen").includes(v.ch.id)) store.set("seen", [...store.get("seen"), v.ch.id]);
@@ -271,7 +271,7 @@ function watch(id) {
 }
 function channel(id) {
   const c = chById[id], m = $("main");
-  if (!c) { m.replaceChildren(el("p", "empty", "このチャンネルは どうがのへや にはありません")); return; }
+  if (!c) { m.replaceChildren(el("p", "empty", "このチャンネルは kidstube にはありません")); return; }
   const vs = (byCh[id] || []).slice().sort((a, b) => b.at - a.at);
   const h = el("div", "chead"), b = el("div"), btns = el("div", "owner");
   const all = el("button", "pill off", "▶ ぜんぶの動画を見る");
