@@ -65,9 +65,8 @@
     <p class="hint">ほかの動画は、プレーヤー右下の「その他の動画」からえらべます。</p>
   </section>
 </main>
-<script src="channels.js"></script>
 <script>
-  const all = (window.CHANNELS || []).filter(c => /^UC[\w-]{22}$/.test(c.id));
+  let all = [];
   const $ = id => document.getElementById(id);
   let genre = "すべて";
 
@@ -121,7 +120,15 @@
     $("player").classList.remove("on"); $("list").style.display = ""; $("chips").style.display = "";
   };
   $("q").oninput = renderGrid;
-  renderChips(); renderGrid();
+  // 許可リストは毎回最新を読み込む（ブラウザに古い一覧が残らないようにする）
+  const loader = document.createElement("script");
+  loader.src = "channels.js?t=" + Date.now();
+  loader.onload = () => {
+    all = (window.CHANNELS || []).filter(c => /^UC[\w-]{22}$/.test(c.id));
+    renderChips(); renderGrid();
+  };
+  loader.onerror = renderGrid;
+  document.body.appendChild(loader);
 </script>
 </body>
 </html>
