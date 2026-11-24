@@ -219,13 +219,17 @@ function weight(v) {
 let SEED = Math.floor(Math.random() * 1e6);
 const reshuffle = () => { SEED = Math.floor(Math.random() * 1e6); };
 function mix(list, salt) {
-  let s = SEED * 131 + (salt || 0) + 7;
-  const rnd = () => (s = (s * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff;
+  // 重みつきの抽選：重みが大きい動画ほど上に来やすいが、毎回くじを引き直すので顔ぶれは大きく入れ替わる
+  let a = (SEED * 131 + (salt || 0) + 7) >>> 0;
+  const rnd = () => { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
   const now = Date.now() / 1000;
-  const scored = list.map(v => [rnd() * (v.ch ? weight(v) : 1) / (1 + (now - v.at) / 86400 / 20), v]).sort((a, b) => b[0] - a[0]);
+  const scored = list.map(v => {
+    const w = v.ch ? Math.pow(weight(v), 2) / Math.sqrt(1 + Math.max(0, now - v.at) / 86400 / 14) : 1;   // 好みの差を強めに効かせ、新しいほど少し有利
+    return [Math.log(rnd() || 1e-9) / w, v];                                                // 0に近いほど上
+  }).sort((x, y) => y[0] - x[0]);
   const seen = {};
-  scored.forEach(x => { if (!x[1].ch) return; const n = seen[x[1].ch.id] = (seen[x[1].ch.id] || 0) + 1; x[0] /= 1 + 1.5 * (n - 1); });
-  return scored.sort((a, b) => b[0] - a[0]).map(x => x[1]);
+  scored.forEach(x => { if (!x[1].ch) return; const n = seen[x[1].ch.id] = (seen[x[1].ch.id] || 0) + 1; x[0] *= 1 + 1.5 * (n - 1); });   // 同じチャンネルが続かないように
+  return scored.sort((x, y) => y[0] - x[0]).map(x => x[1]);
 }
 function pager(box, list, make) {
   let n = 0; const more = el("button", "more", "もっと見る");
