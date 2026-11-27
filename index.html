@@ -223,11 +223,11 @@ function card(v, opt = {}) {
 }
 // ---- おすすめの重みづけ ----
 // カテゴリごとの出やすさ（女の子向けの分野を多めに）。数字が大きいほどトップやおすすめに出やすい。
-const GENRE_W = { "けんちく": 2.2, "おえかき": 2.0, "ものづくり・おかし": 1.8, "おもちゃ・グッズ": 1.8, "たべる・ASMR": 1.6, "こわい話": 1.6, "おしゃれ": 1.6, "アニメ": 1.3, "キャラクター": 1.3,
-  "ダンス": 1.2, "歌い手・ボカロ": 1.1, "ゲーム": 1.0, "アイドル・グループ": 1.0, "エンタメ": 0.9, "VTuber": 0.8, "まなび・くらし": 0.6, "アーティスト": 0.4 };
+const GENRE_W = { "けんちく": 2.2, "おえかき": 2.0, "ものづくり・おかし": 2.4, "おもちゃ・グッズ": 1.8, "たべる・ASMR": 1.6, "こわい話": 1.8, "おしゃれ": 1.6, "アニメ": 1.5, "キャラクター": 1.3,
+  "ダンス": 1.2, "歌い手・ボカロ": 1.2, "ゲーム": 1.0, "アイドル・グループ": 1.0, "エンタメ": 0.9, "VTuber": 0.8, "まなび・くらし": 0.6, "アーティスト": 0.6 };
 // タイトルにこの種の言葉がある動画は出やすくする（建築・ものづくり／恋バナ／ホラー／お絵かき／おしゃれ／スクイーズ・ASMR・大食い／おもちゃ・グッズ）
 const TITLE_W = 2.2;
-const TITLE_RE = /建築|巨大|作ってみた|つくってみた|ミニチュア|DIY|build|house|villa|mansion|恋バナ|恋愛|好きな人|好きなタイプ|告白|カップル|女子会|お泊り|お泊まり|ホラー|怖い|こわい|死ぬ|脱出|都市伝説|心霊|怪談|描いてみた|お絵かき|お絵描き|イラスト|メイキング|色塗り|色ぬり|漫画家|描き方|ヘアアレンジ|ネイル|メイク|コーデ|スクイーズ|ASMR|咀嚼音|大食い|デカ盛り|開封|シール|ガチャ|購入品/i;
+const TITLE_RE = /建築|巨大|作ってみた|つくってみた|ミニチュア|DIY|build|house|villa|mansion|恋バナ|恋愛|好きな人|好きなタイプ|告白|カップル|女子会|お泊り|お泊まり|ホラー|怖い|こわい|死ぬ|脱出|都市伝説|心霊|怪談|描いてみた|お絵かき|お絵描き|イラスト|メイキング|色塗り|色ぬり|漫画家|描き方|ヘアアレンジ|ネイル|メイク|コーデ|スクイーズ|スライム|パキパキ|手作り|恋愛漫画|怖い話|歌ってみた|ASMR|咀嚼音|大食い|デカ盛り|開封|シール|ガチャ|購入品/i;
 const FAV_W = 10;   // channels.js で "pick": 2 ＝ 本人がいちばん好きと言ったチャンネル（みそらくん、ちろぴの、ぜるふぃー）
 // いちばん好きな3チャンネルに近い題材（ロブロックス、マイクラ、ホラーゲーム、買ってみた・TikTok検証・不気味なもの）
 const FAV_TITLE_W = 1.8;
@@ -389,15 +389,74 @@ function favBtn(ch) {
   b.onclick = () => { const f = store.get("fav"); const i = f.indexOf(ch.id); i < 0 ? f.unshift(ch.id) : f.splice(i, 1); store.set("fav", f); draw(); nav(); };
   draw(); return b;
 }
-function playerFrame(src, short) {
+// ---- プレーヤー（YouTube公式の IFrame API と同じ postMessage でやりとりする） ----
+// ねらい：(1) 再生の途中でプレーヤーが読み込み直されて最初に戻ったら、見ていた位置に戻す
+//         (2) 見終わったら、同じプレーヤーのまま次の動画へ進む（全画面のまま続く。同じ動画に戻らない）
+let PL = null;
+const plPost = (st, o) => { try { st.f.contentWindow.postMessage(JSON.stringify(o), "*"); } catch (e) {} };
+const plCmd = (st, func, args) => plPost(st, { event: "command", func, args: args || [] });
+function playerFrame(src, short, queue) {
   const p = el("div", "player" + (short ? " short" : "")), f = el("iframe");
+  src += (src.includes("?") ? "&" : "?") + "enablejsapi=1" + (/^http/.test(location.origin) ? "&origin=" + encodeURIComponent(location.origin) : "");
   f.src = src; f.allow = "autoplay; encrypted-media; fullscreen; picture-in-picture"; f.allowFullscreen = true;
   // プレーヤーの中のボタン（「見る YouTube」、タイトル、ロゴなど）からYouTube本体へ飛べないようにする。
   // allow-popups と allow-top-navigation を付けないので、新しいタブを開く・ページごと移動する操作が効かなくなる。
   f.setAttribute("sandbox", "allow-scripts allow-same-origin allow-presentation");
-  f.referrerPolicy = "strict-origin-when-cross-origin"; f.title = "動画プレーヤー"; p.append(f); return p;
+  f.referrerPolicy = "strict-origin-when-cross-origin"; f.title = "動画プレーヤー"; p.append(f);
+  const st = PL = { f, short: !!short, queue: queue || null, t: 0, dur: 0, state: -9, played: false, restore: 0, ended: false, loads: 0, ready: false, log: [] };
+  f.addEventListener("load", () => {
+    st.ready = false;
+    if (++st.loads > 1 && st.t > 20 && !st.restore) { st.restore = st.t; st.log.push([Date.now(), "reload", st.t]); }   // 中でページごと読み直された
+    let n = 0;
+    const iv = setInterval(() => { if (PL !== st || st.ready || ++n > 60) return clearInterval(iv); plPost(st, { event: "listening", id: 1, channel: "widget" }); }, 250);
+  });
+  return p;
 }
-function watch(id) {
+window.addEventListener("message", e => {
+  const st = PL; if (!st || e.source !== st.f.contentWindow || !/^https:\/\/www\.youtube(-nocookie)?\.com$/.test(e.origin)) return;
+  let d; try { d = typeof e.data === "string" ? JSON.parse(e.data) : e.data; } catch (err) { return; }
+  if (!d) return;
+  if (!st.ready && (d.event === "onReady" || d.event === "initialDelivery" || d.event === "infoDelivery")) {
+    st.ready = true; plCmd(st, "addEventListener", ["onStateChange"]);
+    if (st.restore && st.loads > 1) plCmd(st, "seekTo", [st.restore, true]);
+  }
+  const info = d.info && typeof d.info === "object" ? d.info : {};
+  const s = d.event === "onStateChange" ? d.info : info.playerState;
+  if (typeof info.duration === "number" && info.duration > 0) st.dur = info.duration;
+  if (typeof s === "number" && s !== st.state) {
+    st.log.push([Date.now(), s, Math.round(st.t)]); if (st.log.length > 200) st.log.shift();
+    // 再生していたのに「未開始」に戻った＝プレーヤーが動画を読み込み直した。見ていた位置を覚えておく
+    if ((s === -1 || s === 5) && st.played && !st.restore && st.t > 20 && (!st.dur || st.t < st.dur - 8)) st.restore = st.t;
+    if (s === 1) {
+      st.played = true; st.ended = false;
+      if (st.restore) { const t = st.restore; plCmd(st, "seekTo", [t, true]); setTimeout(() => { if (PL === st && st.restore === t) st.restore = 0; }, 4000); }
+    }
+    if (s === 0 && !st.ended && !st.restore) { st.ended = true; playNext(st); }
+    st.state = s;
+  }
+  if (typeof info.currentTime === "number") {
+    if (st.restore) { if (info.currentTime > st.restore - 3) { st.restore = 0; st.t = info.currentTime; } }   // 元の位置に戻れた
+    else if (st.t > 60 && info.currentTime < 1.5 && (!st.dur || st.t < st.dur - 8) && Date.now() - (st.fixAt || 0) > 30000) {
+      // 1分以上見ていたのに、急に最初へ戻った。見ていた位置に戻す（30秒以内にもう一度最初へ戻したときは、本人の操作とみてそのままにする）
+      st.fixAt = Date.now(); st.restore = st.t; st.log.push([Date.now(), "back", Math.round(st.t)]);
+      plCmd(st, "seekTo", [st.restore, true]);
+    }
+    else st.t = info.currentTime;
+  }
+});
+// 見終わったら、関連動画の順に次へ。プレーヤーはそのままにして、まわり（題名・関連動画）だけ描き直す
+function playNext(st) {
+  if (!st.queue) return;
+  let n = null;
+  while (st.queue.length && !n) n = vById[st.queue.shift()];
+  if (!n) return;
+  if (!!n.short !== st.short || !document.body.contains(st.f)) { location.hash = "#/watch/" + n.id; return; }
+  history.pushState(null, "", "#/watch/" + n.id);
+  st.t = 0; st.dur = 0; st.played = false; st.restore = 0;
+  watch(n.id, st); nav();
+  plCmd(st, "loadVideoById", [n.id]);
+}
+function watch(id, keep) {
   const v = vById[id], m = $("main");
   if (!v) { m.replaceChildren(el("p", "empty", "この動画は KidsTube では見られません")); return; }
   const rel = related(v);
@@ -406,17 +465,22 @@ function watch(id) {
     if (!store.get("seen").includes(v.ch.id)) store.set("seen", [...store.get("seen"), v.ch.id]);
     store.set("chlog", [v.ch.id, ...store.get("chlog")].slice(0, 300)); taste = null;
   }
-  // 見終わったら、関連動画の先頭から順に自動で次へ進む
-  // （再生リストの先頭に今の動画を入れておかないと、関連動画の1本目から始まってしまう）
-  const next = [v, ...rel.slice(0, 25)].map(x => x.id).join(",");
-  const w = el("div", "watch"), L = el("div"), R = el("div", "side");
-  L.append(playerFrame(EMBED() + "" + v.id + "?autoplay=1&rel=0&playsinline=1" + (next ? "&playlist=" + next : ""), v.short), el("h1", "", v.title));
   const o = el("div", "owner");
   if (v.ch.ext) o.append(avatar(v.ch), el("span", "n", v.ch.name));
   else { const n = el("a", "n", v.ch.name); n.href = "#/ch/" + v.ch.id; o.append(avatar(v.ch), n, favBtn(v.ch)); }
   if (v.trend) { const t = el("a", "pill off", "🔥 " + v.trend); t.href = "#/trend/" + encodeURIComponent(v.trend); t.style.cssText = "display:inline-flex;align-items:center"; o.append(t); }
-  L.append(o, el("div", "desc", sub(v) || "いま はやっているもの"));
-  R.append(...rel.map(x => card(x, { side: true })));
+  const below = [el("h1", "", v.title), o, el("div", "desc", sub(v) || "いま はやっているもの")];
+  const side = rel.map(x => card(x, { side: true }));
+  if (keep && keep.L && document.body.contains(keep.f)) {      // 自動で次へ進んだとき：プレーヤーは動かさない（動かすと読み込み直しになる）
+    while (keep.L.children.length > 1) keep.L.lastChild.remove();
+    keep.L.append(...below); keep.R.replaceChildren(...side);
+    return;
+  }
+  // 見終わったあとに進む順番（関連動画の先頭から。途中で同じ動画に戻らないよう、最初に決めた順を使い切る）
+  const w = el("div", "watch"), L = el("div"), R = el("div", "side");
+  L.append(playerFrame(EMBED() + v.id + "?autoplay=1&rel=0&playsinline=1", v.short, rel.slice(0, 40).map(x => x.id)), ...below);
+  PL.L = L; PL.R = R;
+  R.append(...side);
   w.append(L, R); m.replaceChildren(w);
 }
 function channel(id) {
