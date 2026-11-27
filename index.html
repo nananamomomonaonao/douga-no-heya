@@ -406,27 +406,45 @@ function playerFrame(src, short, queue) {
   const st = PL = { f, short: !!short, queue: queue || null, t: 0, dur: 0, state: -9, played: false, restore: 0, ended: false, loads: 0, ready: false, log: [] };
   f.addEventListener("load", () => {
     st.ready = false;
-    if (++st.loads > 1 && st.t > 20 && !st.restore) { st.restore = st.t; st.log.push([Date.now(), "reload", st.t]); }   // 中でページごと読み直された
+    if (++st.loads > 1 && st.t > 8 && !st.restore) { st.restore = st.t; plLog(st, "reload"); }   // 中でページごと読み直された
     let n = 0;
     const iv = setInterval(() => { if (PL !== st || st.ready || ++n > 60) return clearInterval(iv); plPost(st, { event: "listening", id: 1, channel: "widget" }); }, 250);
   });
   return p;
+}
+// 調子が悪いときに原因を調べるための記録（このブラウザの中だけに残る。#/log で見られる）
+function plLog(st, what, extra) {
+  st.log.push([Date.now(), what, Math.round(st.t)]); if (st.log.length > 200) st.log.shift();
+  try {
+    const a = JSON.parse(localStorage.getItem("dh_plog") || "[]");
+    a.push([new Date().toTimeString().slice(0, 8), st.vid || "", what, Math.round(st.t), extra || ""]);
+    localStorage.setItem("dh_plog", JSON.stringify(a.slice(-150)));
+  } catch (e) {}
+}
+function logPage() {
+  let a = []; try { a = JSON.parse(localStorage.getItem("dh_plog") || "[]"); } catch (e) {}
+  const NAME = { "-1": "未開始", "0": "終了", "1": "再生", "2": "一時停止", "3": "読み込み中", "5": "待機", back: "★最初に戻った→元の位置へ", reload: "★プレーヤー読み直し", error: "★エラー", open: "ひらいた", next: "次の動画へ" };
+  const t = el("textarea"); t.readOnly = true; t.style.cssText = "width:100%;height:70vh;background:#181818;color:#eee;border:1px solid #333;font:13px/1.5 monospace;padding:8px";
+  t.value = "KidsTube 再生の記録（CMなしモード：" + (premium() ? "オン" : "オフ") + "）\n" + navigator.userAgent.replace(/^.*?(Chrome\/[\d.]+|Version\/[\d.]+ Safari).*$/, "$1") + "\n時刻 動画 できごと 位置(秒)\n"
+    + a.map(x => x[0] + " " + x[1] + " " + (NAME[x[2]] || x[2]) + " " + x[3] + (x[4] ? " " + x[4] : "")).join("\n");
+  $("main").replaceChildren(el("h2", "sec", "再生の記録"), el("p", "s", "下の文字をぜんぶコピーして送ってください。"), t);
 }
 window.addEventListener("message", e => {
   const st = PL; if (!st || e.source !== st.f.contentWindow || !/^https:\/\/www\.youtube(-nocookie)?\.com$/.test(e.origin)) return;
   let d; try { d = typeof e.data === "string" ? JSON.parse(e.data) : e.data; } catch (err) { return; }
   if (!d) return;
   if (!st.ready && (d.event === "onReady" || d.event === "initialDelivery" || d.event === "infoDelivery")) {
-    st.ready = true; plCmd(st, "addEventListener", ["onStateChange"]);
+    st.ready = true; plCmd(st, "addEventListener", ["onStateChange"]); plCmd(st, "addEventListener", ["onError"]);
     if (st.restore && st.loads > 1) plCmd(st, "seekTo", [st.restore, true]);
   }
+  if (d.event === "onError") plLog(st, "error", String(d.info));
   const info = d.info && typeof d.info === "object" ? d.info : {};
   const s = d.event === "onStateChange" ? d.info : info.playerState;
   if (typeof info.duration === "number" && info.duration > 0) st.dur = info.duration;
   if (typeof s === "number" && s !== st.state) {
-    st.log.push([Date.now(), s, Math.round(st.t)]); if (st.log.length > 200) st.log.shift();
+    plLog(st, s);
     // 再生していたのに「未開始」に戻った＝プレーヤーが動画を読み込み直した。見ていた位置を覚えておく
-    if ((s === -1 || s === 5) && st.played && !st.restore && st.t > 20 && (!st.dur || st.t < st.dur - 8)) st.restore = st.t;
+    if ((s === -1 || s === 5) && st.played && !st.restore && st.t > 8 && (!st.dur || st.t < st.dur - 8)) st.restore = st.t;
     if (s === 1) {
       st.played = true; st.ended = false;
       if (st.restore) { const t = st.restore; plCmd(st, "seekTo", [t, true]); setTimeout(() => { if (PL === st && st.restore === t) st.restore = 0; }, 4000); }
@@ -436,9 +454,9 @@ window.addEventListener("message", e => {
   }
   if (typeof info.currentTime === "number") {
     if (st.restore) { if (info.currentTime > st.restore - 3) { st.restore = 0; st.t = info.currentTime; } }   // 元の位置に戻れた
-    else if (st.t > 60 && info.currentTime < 1.5 && (!st.dur || st.t < st.dur - 8) && Date.now() - (st.fixAt || 0) > 30000) {
-      // 1分以上見ていたのに、急に最初へ戻った。見ていた位置に戻す（30秒以内にもう一度最初へ戻したときは、本人の操作とみてそのままにする）
-      st.fixAt = Date.now(); st.restore = st.t; st.log.push([Date.now(), "back", Math.round(st.t)]);
+    else if (st.t > 8 && info.currentTime < 1.5 && (!st.dur || st.t < st.dur - 8) && Date.now() - (st.fixAt || 0) > 8000) {
+      // 見ている途中で急に最初へ戻った。見ていた位置に戻す（8秒以内にもう一度最初へ戻したときは、本人の操作とみてそのままにする）
+      st.fixAt = Date.now(); st.restore = st.t; plLog(st, "back");
       plCmd(st, "seekTo", [st.restore, true]);
     }
     else st.t = info.currentTime;
@@ -452,7 +470,7 @@ function playNext(st) {
   if (!n) return;
   if (!!n.short !== st.short || !document.body.contains(st.f)) { location.hash = "#/watch/" + n.id; return; }
   history.pushState(null, "", "#/watch/" + n.id);
-  st.t = 0; st.dur = 0; st.played = false; st.restore = 0;
+  st.t = 0; st.dur = 0; st.played = false; st.restore = 0; st.vid = n.id; plLog(st, "next");
   watch(n.id, st); nav();
   plCmd(st, "loadVideoById", [n.id]);
 }
@@ -479,7 +497,7 @@ function watch(id, keep) {
   // 見終わったあとに進む順番（関連動画の先頭から。途中で同じ動画に戻らないよう、最初に決めた順を使い切る）
   const w = el("div", "watch"), L = el("div"), R = el("div", "side");
   L.append(playerFrame(EMBED() + v.id + "?autoplay=1&rel=0&playsinline=1", v.short, rel.slice(0, 40).map(x => x.id)), ...below);
-  PL.L = L; PL.R = R;
+  PL.L = L; PL.R = R; PL.vid = v.id; plLog(PL, "open");
   R.append(...side);
   w.append(L, R); m.replaceChildren(w);
 }
@@ -576,6 +594,7 @@ function route() {
   else if (p[0] === "trends") trendsPage();
   else if (p[0] === "fav") favPage();
   else if (p[0] === "history") histPage();
+  else if (p[0] === "log") logPage();
   else if (p[0] === "q") searchPage(p.slice(1).join("/"));
   else home();
   nav(); window.scrollTo(0, 0);
