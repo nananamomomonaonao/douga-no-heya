@@ -423,7 +423,7 @@ function plLog(st, what, extra) {
 }
 function logPage() {
   let a = []; try { a = JSON.parse(localStorage.getItem("dh_plog") || "[]"); } catch (e) {}
-  const NAME = { "-1": "未開始", "0": "終了", "1": "再生", "2": "一時停止", "3": "読み込み中", "5": "待機", back: "★最初に戻った→元の位置へ", reload: "★プレーヤー読み直し", error: "★エラー", open: "ひらいた", next: "次の動画へ" };
+  const NAME = { "-1": "未開始", "0": "終了", "1": "再生", "2": "一時停止", "3": "読み込み中", "5": "待機", back: "★最初に戻った→元の位置へ", reload: "★プレーヤー読み直し", error: "★エラー", open: "ひらいた", tick: "・", rewind: "★位置が戻った", next: "次の動画へ" };
   const t = el("textarea"); t.readOnly = true; t.style.cssText = "width:100%;height:70vh;background:#181818;color:#eee;border:1px solid #333;font:13px/1.5 monospace;padding:8px";
   t.value = "KidsTube 再生の記録（CMなしモード：" + (premium() ? "オン" : "オフ") + "）\n" + navigator.userAgent.replace(/^.*?(Chrome\/[\d.]+|Version\/[\d.]+ Safari).*$/, "$1") + "\n時刻 動画 できごと 位置(秒)\n"
     + a.map(x => x[0] + " " + x[1] + " " + (NAME[x[2]] || x[2]) + " " + x[3] + (x[4] ? " " + x[4] : "")).join("\n");
@@ -453,6 +453,8 @@ window.addEventListener("message", e => {
     st.state = s;
   }
   if (typeof info.currentTime === "number") {
+    if (Date.now() - (st.beat || 0) > 10000) { st.beat = Date.now(); plLog(st, "tick", "now=" + Math.round(info.currentTime)); }   // 10秒ごとに位置を記録
+    else if (info.currentTime < st.t - 5) plLog(st, "rewind", "now=" + Math.round(info.currentTime));
     if (st.restore) { if (info.currentTime > st.restore - 3) { st.restore = 0; st.t = info.currentTime; } }   // 元の位置に戻れた
     else if (st.t > 8 && info.currentTime < 1.5 && (!st.dur || st.t < st.dur - 8) && Date.now() - (st.fixAt || 0) > 8000) {
       // 見ている途中で急に最初へ戻った。見ていた位置に戻す（8秒以内にもう一度最初へ戻したときは、本人の操作とみてそのままにする）
