@@ -83,6 +83,9 @@
   .player { position:relative; width:100%; aspect-ratio:16/9; background:#000; border-radius:12px; overflow:hidden; max-height:calc(100vh - 56px - 150px); margin:0 auto; }
   .player.short { aspect-ratio:9/16; max-width:calc((100vh - 56px - 150px) * 9 / 16); }
   .player iframe { position:absolute; inset:0; width:100%; height:100%; border:0; }
+  /* 再生中、マウスを乗せただけでYouTubeの暗い帯と題名が出ないようにする透明なおおい（下の操作バーのところは空けてある） */
+  .player .shield { position:absolute; left:0; right:0; top:0; height:78%; display:none; cursor:pointer; }
+  .player .shield.on { display:block; }
   .watch h1 { font-size:20px; line-height:28px; margin:12px 0 0; overflow-wrap:anywhere; }
   .owner { display:flex; align-items:center; gap:12px; margin-top:12px; flex-wrap:wrap; }
   .owner .ava { width:40px; height:40px; }
@@ -404,6 +407,17 @@ function playerFrame(src, short, queue) {
   f.setAttribute("sandbox", "allow-scripts allow-same-origin allow-presentation");
   f.referrerPolicy = "strict-origin-when-cross-origin"; f.title = "動画プレーヤー"; p.append(f);
   const st = PL = { f, short: !!short, queue: queue || null, t: 0, dur: 0, state: -9, played: false, restore: 0, ended: false, loads: 0, ready: false, log: [] };
+  // 透明なおおい。再生中だけ動画の上（下の操作バー以外）にかぶせて、マウスの動きをプレーヤーに伝えない。
+  // クリック＝一時停止。下の操作バーから上へ来たとき（音量・字幕・設定を押したいとき）は、いったん外す。
+  if (!short) {
+    const sh = st.sh = el("div", "shield"); p.append(sh);
+    st.armed = true;
+    st.shield = () => sh.classList.toggle("on", st.armed && (st.state === 1 || st.state === 3) && st.played);
+    const unlock = () => { st.armed = false; st.shield(); clearTimeout(st.armT); st.armT = setTimeout(() => { st.armed = true; st.shield(); }, 15000); };
+    sh.addEventListener("mouseenter", e => { const r = sh.getBoundingClientRect(); if (e.clientY > r.bottom - 12) unlock(); });
+    sh.addEventListener("click", () => { plCmd(st, "pauseVideo"); unlock(); });
+    p.addEventListener("mouseleave", () => { clearTimeout(st.armT); st.armed = true; st.shield(); });
+  }
   f.addEventListener("load", () => {
     st.ready = false;
     if (++st.loads > 1 && st.t > 8 && !st.restore) { st.restore = st.t; plLog(st, "reload"); }   // 中でページごと読み直された
@@ -451,6 +465,7 @@ window.addEventListener("message", e => {
     }
     if (s === 0 && !st.ended && !st.restore) { st.ended = true; playNext(st); }
     st.state = s;
+    if (st.shield) st.shield();
   }
   if (typeof info.currentTime === "number") {
     if (Date.now() - (st.beat || 0) > 10000) { st.beat = Date.now(); plLog(st, "tick", "now=" + Math.round(info.currentTime)); }   // 10秒ごとに位置を記録
@@ -463,6 +478,17 @@ window.addEventListener("message", e => {
     }
     else st.t = info.currentTime;
   }
+});
+// おおいをクリックしてもプレーヤーにキー入力が届かないので、よく使うキーはこちらで受ける
+window.addEventListener("keydown", e => {
+  const st = PL; if (!st || !st.sh || !document.body.contains(st.f) || e.metaKey || e.ctrlKey || e.altKey) return;
+  if (/^(INPUT|TEXTAREA|SELECT|BUTTON|A)$/.test((e.target && e.target.tagName) || "")) return;
+  if (e.key === " " || e.key === "k") plCmd(st, st.state === 1 || st.state === 3 ? "pauseVideo" : "playVideo");
+  else if (e.key === "ArrowRight") plCmd(st, "seekTo", [st.t + 5, true]);
+  else if (e.key === "ArrowLeft") { const t = Math.max(0, st.t - 5); if (t < 1.5) st.fixAt = Date.now(); plCmd(st, "seekTo", [t, true]); }
+  else if (e.key === "f") { try { st.f.requestFullscreen(); } catch (err) {} }
+  else return;
+  e.preventDefault();
 });
 // 見終わったら、関連動画の順に次へ。プレーヤーはそのままにして、まわり（題名・関連動画）だけ描き直す
 function playNext(st) {
